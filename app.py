@@ -10,32 +10,47 @@ st.set_page_config(
     layout="wide"
 )
 
+# =============================
 # Dark Theme CSS
+# =============================
 st.markdown("""
 <style>
 .stApp {
-    background: linear-gradient(135deg, #050505, #141414, #1f1f1f);
+    background: linear-gradient(135deg, #050505, #111111, #1c1c1c);
     color: white;
 }
+
 [data-testid="stSidebar"] {
-    background-color: #111111;
+    background-color: #0b0b0b;
 }
+
 h1, h2, h3 {
     color: white;
 }
+
 .movie-card {
     background-color: #181818;
-    padding: 15px;
-    border-radius: 15px;
+    padding: 14px;
+    border-radius: 18px;
     border: 1px solid #333;
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 0 18px rgba(255,255,255,0.05);
 }
+
+.movie-card:hover {
+    transform: scale(1.02);
+    transition: 0.2s;
+    border: 1px solid #ff4b4b;
+}
+
 .movie-title {
     font-size: 16px;
     font-weight: bold;
     color: white;
+    margin-top: 10px;
 }
+
 .movie-info {
     font-size: 13px;
     color: #bbbbbb;
@@ -43,18 +58,59 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
+# =============================
 # Load Data
+# =============================
 df = pd.read_csv("korean_movies_top100.csv")
 
-st.title("🎬 Korean Film Trends Dashboard")
-st.write("Explore Korean film trends through box office performance, genres, release years, and audience numbers.")
+# =============================
+# TMDB Poster Function
+# =============================
+TMDB_API_KEY = st.secrets["TMDB_API_KEY"]
 
-# Sidebar
+@st.cache_data
+def get_poster_url(movie_title):
+    url = "https://api.themoviedb.org/3/search/movie"
+
+    params = {
+        "api_key": TMDB_API_KEY,
+        "query": movie_title,
+        "language": "en-US"
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=5)
+
+        if response.status_code == 200:
+            results = response.json().get("results", [])
+
+            if results:
+                poster_path = results[0].get("poster_path")
+
+                if poster_path:
+                    return f"https://image.tmdb.org/t/p/w500{poster_path}"
+
+    except:
+        pass
+
+    return f"https://placehold.co/300x450/111111/FFFFFF?text={quote(movie_title)}"
+
+# =============================
+# Title
+# =============================
+st.title("🎬 Korean Film Trends Dashboard")
+st.write(
+    "Explore Korean film trends through box office performance, genres, release years, audience numbers, and real movie posters."
+)
+
+# =============================
+# Sidebar Filters
+# =============================
 st.sidebar.header("🎛️ Filters")
 
 search = st.sidebar.text_input("🔍 Search Movie Title")
 
-genre_list = ["All"] + sorted(df["Genre"].unique().tolist())
+genre_list = ["All"] + sorted(df["Genre"].dropna().unique().tolist())
 selected_genre = st.sidebar.selectbox("🎭 Genre", genre_list)
 
 year_range = st.sidebar.slider(
@@ -79,7 +135,9 @@ filtered_df = filtered_df[
     (filtered_df["Year"] <= year_range[1])
 ]
 
-# KPI
+# =============================
+# KPI Cards
+# =============================
 col1, col2, col3 = st.columns(3)
 
 col1.metric("Total Movies", len(filtered_df))
@@ -95,7 +153,9 @@ if len(filtered_df) == 0:
     st.warning("No movies found. Please change your filters.")
 
 else:
+    # =============================
     # Top 10 Chart
+    # =============================
     st.subheader("🏆 Top 10 Korean Movies by Audience")
 
     top10 = filtered_df.sort_values("Audience", ascending=False).head(10)
@@ -121,11 +181,14 @@ else:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # Genre and Year Charts
+    # =============================
+    # Genre + Year Charts
+    # =============================
     col_left, col_right = st.columns(2)
 
     with col_left:
         st.subheader("🎭 Genre Distribution")
+
         genre_data = filtered_df["Genre"].value_counts().reset_index()
         genre_data.columns = ["Genre", "Count"]
 
@@ -147,6 +210,7 @@ else:
 
     with col_right:
         st.subheader("📈 Yearly Audience Trend")
+
         yearly = filtered_df.groupby("Year")["Audience"].sum().reset_index()
 
         fig3 = px.line(
@@ -165,18 +229,20 @@ else:
 
         st.plotly_chart(fig3, use_container_width=True)
 
-    # Poster Cards
+    # =============================
+    # Poster Gallery
+    # =============================
     st.subheader("🎞️ Movie Poster Gallery")
 
     poster_df = filtered_df.sort_values("Audience", ascending=False).head(24)
 
     cols = st.columns(4)
 
-    for index, row in poster_df.iterrows():
+    for i, row in poster_df.reset_index(drop=True).iterrows():
         movie_title = row["Movie"]
-        poster_url = f"https://placehold.co/300x450/111111/FFFFFF?text={quote(movie_title)}"
+        poster_url = get_poster_url(movie_title)
 
-        with cols[index % 4]:
+        with cols[i % 4]:
             st.markdown(
                 f"""
                 <div class="movie-card">
@@ -189,7 +255,9 @@ else:
                 unsafe_allow_html=True
             )
 
+    # =============================
     # Data Table
+    # =============================
     st.subheader("📋 Movie Data Table")
 
     st.dataframe(

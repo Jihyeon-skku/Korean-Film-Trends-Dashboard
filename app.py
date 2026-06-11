@@ -74,8 +74,9 @@ def get_poster_url(movie_title):
 
     params = {
         "api_key": TMDB_API_KEY,
-        "query": movie_title,
-        "language": "en-US"
+       "query": movie_title.replace(" #", ""),
+"language": "ko-KR",
+"region": "KR"
     }
 
     try:
